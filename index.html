@@ -1030,7 +1030,14 @@ const ADDR = {
 const SCAN = 'https://etherscan.io/address';
 const UNI_SWAP = `https://app.uniswap.org/swap?inputCurrency=ETH&outputCurrency=${ADDR.ASH_TOKEN}&chain=mainnet`;
 const X_URL    = 'https://x.com/ashethereumV4/';
-const FALLBACK_RPC = 'https://eth.llamarpc.com';
+const FALLBACK_RPCS = [
+  'https://eth.llamarpc.com',
+  'https://rpc.ankr.com/eth',
+  'https://1rpc.io/eth',
+  'https://eth-mainnet.public.blastapi.io',
+  'https://cloudflare-eth.com',
+  'https://eth.drpc.org',
+];
 const TOTAL_SUPPLY = 1_000_000_000;  // for mcap calc
 
 //============================== ABIs (minimal) ======================//
@@ -1104,15 +1111,31 @@ async function init(){
   document.getElementById('ashFactoryScan').href = `${SCAN}/${ADDR.HOOK_FACTORY}`;
 
   // build read-only provider for stats even when no wallet
-  try {
-    readProvider = new ethers.JsonRpcProvider(FALLBACK_RPC);
-    ashTokenRO    = new ethers.Contract(ADDR.ASH_TOKEN, ASH_TOKEN_ABI, readProvider);
-    ashProtocolRO = new ethers.Contract(ADDR.ASH_PROTOCOL, ASH_PROTOCOL_ABI, readProvider);
-    stateViewRO   = new ethers.Contract(ADDR.STATE_VIEW, STATE_VIEW_ABI, readProvider);
-    oracleRO      = new ethers.Contract(ADDR.ETH_USD_FEED, CHAINLINK_ABI, readProvider);
-  } catch(e) {
-    console.warn('readProvider failed:', e);
+  // try each RPC until one responds
+  for (const rpcUrl of FALLBACK_RPCS) {
+    try {
+      const p = new ethers.JsonRpcProvider(rpcUrl, 1);
+      // quick health check with 3s timeout
+      await Promise.race([
+        p.getBlockNumber(),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 3000))
+      ]);
+      readProvider = p;
+      console.log('[ASH] RPC connected:', rpcUrl);
+      break;
+    } catch(e) {
+      console.warn('[ASH] RPC failed:', rpcUrl, e.message);
+    }
   }
+  if (!readProvider) {
+    toast('error', 'No RPC available',
+      'All public RPC endpoints failed to respond. Check your network or try a VPN.');
+    return;
+  }
+  ashTokenRO    = new ethers.Contract(ADDR.ASH_TOKEN, ASH_TOKEN_ABI, readProvider);
+  ashProtocolRO = new ethers.Contract(ADDR.ASH_PROTOCOL, ASH_PROTOCOL_ABI, readProvider);
+  stateViewRO   = new ethers.Contract(ADDR.STATE_VIEW, STATE_VIEW_ABI, readProvider);
+  oracleRO      = new ethers.Contract(ADDR.ETH_USD_FEED, CHAINLINK_ABI, readProvider);
 
   // try silent reconnect
   if (window.ethereum) {
@@ -1194,7 +1217,7 @@ async function refresh(){
 }
 
 async function refreshPrices(){
-  // ETH/USD from Chainlink
+  // ETH/USD from Chainlink (independent of pool)
   if (oracleRO) {
     try {
       const [answer, dec] = await Promise.all([
@@ -1204,13 +1227,17 @@ async function refreshPrices(){
       cachedEthUsd = Number(answer) / Math.pow(10, Number(dec));
       setText('psEthUsd', '$' + Math.round(cachedEthUsd).toLocaleString());
     } catch(e) {
-      console.warn('eth/usd:', e.message);
+      console.warn('[ASH] eth/usd oracle failed:', e.message);
+      setText('psEthUsd', '— oracle err');
     }
   }
 
   // V4 pool sqrtPriceX96 → ASH price in ETH
   const c = ashProtocolRO || ashProtocol;
-  if (!c || !stateViewRO) return;
+  if (!c || !stateViewRO) {
+    setText('psPrice', '— no rpc');
+    return;
+  }
   try {
     if (!cachedPoolKey) {
       const k = await c.POOL_KEY();
@@ -1218,32 +1245,37 @@ async function refreshPrices(){
         currency0: k.currency0, currency1: k.currency1,
         fee: Number(k.fee), tickSpacing: Number(k.tickSpacing), hooks: k.hooks,
       };
+      // If POOL_KEY returns all zeros, AshProtocol.initialize() never ran
+      if (cachedPoolKey.hooks === ethers.ZeroAddress) {
+        setText('psPrice', '— hook not init');
+        setText('psMcap', '—');
+        setText('psTvl', '— hook not init');
+        cachedPoolKey = null;
+        return;
+      }
       cachedPoolId = computePoolId(cachedPoolKey);
+      console.log('[ASH] computed pool id:', cachedPoolId);
     }
     if (cachedPoolKey.currency0 !== ethers.ZeroAddress) {
-      // unexpected currency order — protocol expects ETH (0x0) as currency0
-      console.warn('Unexpected currency0:', cachedPoolKey.currency0);
+      console.warn('[ASH] currency0 is not zero (ETH):', cachedPoolKey.currency0);
+      setText('psPrice', '— bad pool key');
       return;
     }
     const slot0 = await stateViewRO.getSlot0(cachedPoolId);
     const sqrtPriceX96 = slot0[0];
 
-    // currency0 = ETH, currency1 = ASH
-    // sqrtPriceX96 = sqrt(ASH/ETH) * 2^96
-    // price ASH per ETH = (sqrt / 2^96)^2
-    // ASH price in ETH = 1 / (ASH per ETH) = 2^192 / sqrt^2
     if (sqrtPriceX96 === 0n) {
-      // pool not initialized
-      setText('psPrice', '— pool init pending');
+      // V4 pool not initialized yet (PoolInit.init() not called)
+      setText('psPrice', '— v4 pool not init');
       setText('psMcap', '—');
+      setText('psTvl', '— v4 pool not init');
       return;
     }
     const Q96 = 2n ** 96n;
     const sqrtFloat = Number(sqrtPriceX96) / Number(Q96);
-    const ashPerEth = sqrtFloat * sqrtFloat;  // ASH amount per 1 ETH
-    cachedAshPriceEth = 1 / ashPerEth;        // ETH per 1 ASH
+    const ashPerEth = sqrtFloat * sqrtFloat;
+    cachedAshPriceEth = 1 / ashPerEth;
 
-    // display
     if (cachedEthUsd) {
       const ashUsd = cachedAshPriceEth * cachedEthUsd;
       const mcap = ashUsd * TOTAL_SUPPLY;
@@ -1253,25 +1285,21 @@ async function refreshPrices(){
       setText('psPrice', cachedAshPriceEth.toExponential(3) + ' Ξ');
     }
 
-    // Pool TVL: try via getLiquidity + tick math (simplified approximation)
-    // For full-range LP at initial price: TVL ≈ 2× ETH side
-    // ETH side = liquidity / sqrtPrice (roughly)
-    // For now we read PoolManager's ETH balance directly as proxy
+    // Pool TVL via PoolManager ETH balance × 2 (LP is symmetric)
     if (readProvider && cachedEthUsd) {
       const ethBalance = await readProvider.getBalance(ADDR.POOL_MANAGER);
       const ethF = Number(ethers.formatEther(ethBalance));
-      const tvl = ethF * 2 * cachedEthUsd;
       if (ethF > 0) {
-        setText('psTvl', '$' + fmtUsd(tvl));
+        setText('psTvl', '$' + fmtUsd(ethF * 2 * cachedEthUsd));
       } else {
-        setText('psTvl', '— LP pending');
+        setText('psTvl', '— LP not added');
       }
     }
   } catch(e) {
-    console.warn('pool slot0 read failed:', e.message);
-    setText('psPrice', '— pool init pending');
+    console.warn('[ASH] pool slot0 read failed:', e.message);
+    setText('psPrice', '— rpc err');
     setText('psMcap', '—');
-    setText('psTvl', '— LP pending');
+    setText('psTvl', '—');
   }
 }
 
