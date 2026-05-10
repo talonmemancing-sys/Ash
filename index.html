@@ -1,0 +1,1833 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ASH</title>
+<link rel="icon" href="logo.png" type="image/png">
+<link rel="apple-touch-icon" href="logo.png">
+<meta property="og:title" content="ASH — Burn Engine on Uniswap V4" />
+<meta property="og:description" content="Pay ETH. Earn 2× back. A Uniswap V4 hook on Ethereum." />
+<meta property="og:image" content="logo.png" />
+<meta name="theme-color" content="#0A0A0A" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:ital,wght@0,300..900;1,300..900&family=JetBrains+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  /* ============================== TOKENS ============================== */
+  :root{
+    --bg:           #0A0A0A;
+    --bg-elev:      #111111;
+    --bg-card:      #141414;
+    --bg-input:     #1A1A1A;
+    --bg-hover:     #1F1F1F;
+
+    --line:         rgba(255,255,255,0.06);
+    --line-2:       rgba(255,255,255,0.10);
+    --line-strong:  rgba(255,255,255,0.16);
+
+    --fg:           #FAFAFA;
+    --fg-2:         #A8A8A8;
+    --fg-3:         #707070;
+    --fg-4:         #4A4A4A;
+
+    --accent:       #DC2853;
+    --accent-2:     #B11F44;
+    --accent-soft:  rgba(220,40,83,0.10);
+    --accent-glow:  rgba(220,40,83,0.20);
+
+    --green:        #2EB872;
+    --warning:      #E8A33D;
+    --danger:       #E84B3D;
+
+    --r-xs: 6px; --r-sm: 10px; --r-md: 14px; --r-lg: 20px; --r-xl: 28px;
+
+    --f-display:   'Inter Tight', system-ui, sans-serif;
+    --f-ui:        'Inter Tight', system-ui, sans-serif;
+    --f-mono:      'JetBrains Mono', ui-monospace, monospace;
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-font-smoothing:antialiased}
+  html,body{background:var(--bg);color:var(--fg);font-family:var(--f-ui);font-size:14px;line-height:1.5;min-height:100vh}
+  body{position:relative;overflow-x:hidden}
+  a{color:inherit;text-decoration:none}
+  button{font-family:inherit;cursor:pointer;border:0;background:none;color:inherit}
+  input{font-family:inherit;color:inherit;background:none;border:0;outline:none}
+  input[type=number]{-moz-appearance:textfield}
+  input::-webkit-outer-spin-button,input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+
+  /* ============================== ATMOSPHERIC BG ============================== */
+  .bg-mesh{
+    position:fixed;inset:0;z-index:-3;pointer-events:none;
+    background-image:
+      radial-gradient(ellipse 900px 700px at 50% -100px, rgba(220,40,83,0.10) 0%, transparent 55%),
+      radial-gradient(ellipse 600px 500px at 90% 70%,  rgba(220,40,83,0.04) 0%, transparent 60%);
+    filter: blur(40px);
+  }
+  .bg-grain{
+    position:fixed;inset:0;z-index:-2;pointer-events:none;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='320' height='320'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch' seed='3'/><feColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.4 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)' opacity='0.4'/></svg>");
+    mix-blend-mode:soft-light;opacity:0.5;
+  }
+  .bg-vignette{
+    position:fixed;inset:0;z-index:-1;pointer-events:none;
+    background:radial-gradient(ellipse 110% 90% at 50% 50%, transparent 50%, rgba(10,10,10,0.5) 100%);
+  }
+  .embers{position:fixed;inset:0;z-index:-1;pointer-events:none;overflow:hidden}
+  .ember{
+    position:absolute;bottom:-10px;border-radius:50%;
+    background:radial-gradient(circle, rgba(255,255,255,0.5) 0%, rgba(220,40,83,0.15) 60%, transparent 80%);
+    animation:rise linear infinite;will-change:transform,opacity;filter:blur(0.5px);
+  }
+  @keyframes rise{
+    0%   {transform:translateY(0) translateX(0) scale(0.6); opacity:0}
+    10%  {opacity:0.5}
+    50%  {transform:translateY(-50vh) translateX(15px) scale(1); opacity:0.4}
+    90%  {opacity:0.15}
+    100% {transform:translateY(-110vh) translateX(-10px) scale(0.4); opacity:0}
+  }
+  @media (max-width:760px){.ember{display:none}}
+
+  /* ============================== NAV ============================== */
+  .nav{
+    position:sticky;top:0;z-index:50;
+    background:rgba(10,10,10,0.78);backdrop-filter:blur(14px) saturate(140%);
+    border-bottom:1px solid var(--line);
+    height:64px;display:flex;align-items:center;
+  }
+  .nav-inner{
+    max-width:1280px;width:100%;margin:0 auto;padding:0 28px;
+    display:flex;align-items:center;gap:20px;
+  }
+  .brand{display:flex;align-items:center;gap:10px;font-family:var(--f-display);font-weight:700;font-size:18px;letter-spacing:-0.01em}
+  .brand .mark{
+    width:32px;height:32px;border-radius:8px;
+    object-fit:cover;display:block;
+    box-shadow:0 0 18px rgba(220,40,83,0.35);
+  }
+  .brand .dim{color:var(--fg-3)}
+  .nav-spacer{flex:1}
+  .nav-links{display:flex;gap:6px;align-items:center}
+  .nav-link{
+    padding:8px 14px;font-size:13px;color:var(--fg-2);font-weight:500;
+    border-radius:var(--r-sm);transition:all 0.15s;
+    display:inline-flex;align-items:center;gap:6px;
+  }
+  .nav-link:hover{background:var(--bg-hover);color:var(--fg)}
+  .nav-link svg{width:13px;height:13px}
+
+  /* ============================== BUTTONS ============================== */
+  .btn{
+    height:38px;padding:0 16px;border-radius:var(--r-sm);
+    font-size:13px;font-weight:600;display:inline-flex;align-items:center;gap:6px;
+    transition:all 0.15s;letter-spacing:0.005em;
+  }
+  .btn-ghost{background:var(--bg-input);border:1px solid var(--line-2);color:var(--fg)}
+  .btn-ghost:hover{background:var(--bg-hover);border-color:var(--line-strong)}
+  .btn-primary{
+    background:var(--accent);color:#fff;border:1px solid var(--accent);
+    box-shadow:0 4px 16px rgba(220,40,83,0.25);
+  }
+  .btn-primary:hover{background:var(--accent-2);border-color:var(--accent-2)}
+  .btn-primary:disabled{opacity:0.45;cursor:not-allowed;box-shadow:none}
+
+  /* ============================== HERO ============================== */
+  .container{max-width:1280px;margin:0 auto;padding:0 28px}
+  .hero{padding:80px 0 60px;border-bottom:1px solid var(--line)}
+  .hero-eyebrow{
+    font-family:var(--f-mono);font-size:11px;color:var(--fg-3);
+    letter-spacing:0.18em;text-transform:uppercase;font-weight:500;margin-bottom:24px;
+  }
+  .hero-eyebrow .dot{
+    display:inline-block;width:6px;height:6px;border-radius:50%;
+    background:var(--green);margin-right:8px;vertical-align:middle;
+    box-shadow:0 0 8px var(--green);animation:pulse 2s ease-in-out infinite;
+  }
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
+  .hero-grid{display:grid;grid-template-columns:1fr 380px;gap:60px;align-items:start}
+  .ash-wordmark{
+    font-family:var(--f-display);font-weight:800;font-size:120px;line-height:0.95;
+    letter-spacing:-0.05em;margin-bottom:18px;
+  }
+  .ash-wordmark .dim{color:var(--fg-3)}
+  .hero-tagline{
+    font-family:var(--f-display);font-weight:600;font-size:30px;line-height:1.2;letter-spacing:-0.02em;
+    color:var(--fg-2);margin-bottom:18px;
+  }
+  .hero-tagline b{color:var(--fg);font-weight:700}
+  .hero-tagline em{color:var(--accent);font-style:normal;font-weight:700}
+  .hero-desc{font-size:15px;line-height:1.65;color:var(--fg-2);max-width:560px;margin-bottom:30px}
+  .hero-cta-row{display:flex;gap:10px}
+  .hero-cta{
+    height:48px;padding:0 22px;border-radius:var(--r-sm);
+    font-size:14px;font-weight:600;letter-spacing:0.005em;
+    display:inline-flex;align-items:center;gap:8px;transition:all 0.15s;
+  }
+  .hero-cta.primary{
+    background:var(--accent);color:#fff;
+    box-shadow:0 6px 20px rgba(220,40,83,0.30);
+  }
+  .hero-cta.primary:hover{background:var(--accent-2);transform:translateY(-1px)}
+  .hero-cta.ghost{background:var(--bg-input);border:1px solid var(--line-2);color:var(--fg)}
+  .hero-cta.ghost:hover{background:var(--bg-hover);border-color:var(--line-strong)}
+
+  /* ============================== HERO PRICE STRIP ============================== */
+  .price-strip{
+    margin-top:30px;padding:16px 20px;background:var(--bg-card);
+    border:1px solid var(--line);border-radius:var(--r-md);
+    display:flex;flex-wrap:wrap;align-items:center;gap:24px;
+  }
+  .price-strip-item{display:flex;flex-direction:column;gap:2px;min-width:90px}
+  .price-strip-item .l{font-family:var(--f-mono);font-size:10px;color:var(--fg-3);letter-spacing:0.1em;text-transform:uppercase;font-weight:500}
+  .price-strip-item .v{font-family:var(--f-mono);font-size:16px;font-weight:600;color:var(--fg)}
+  .price-strip-item .v.green{color:var(--green)}
+  .price-strip-item .v.accent{color:var(--accent)}
+  .price-strip .div{width:1px;align-self:stretch;background:var(--line)}
+
+  /* ============================== HERO LIVE PANEL ============================== */
+  .hero-live{
+    background:var(--bg-card);border:1px solid var(--line);border-radius:var(--r-lg);padding:24px;
+    backdrop-filter:blur(8px);
+  }
+  .hero-live-title{
+    font-family:var(--f-mono);font-size:11px;color:var(--fg-3);
+    letter-spacing:0.18em;text-transform:uppercase;font-weight:500;margin-bottom:18px;
+    display:flex;align-items:center;justify-content:space-between;
+  }
+  .hero-live-title .live{color:var(--green);display:flex;align-items:center;gap:6px}
+  .hero-live-title .live::before{
+    content:'';width:6px;height:6px;border-radius:50%;background:var(--green);
+    animation:pulse 2s ease-in-out infinite;box-shadow:0 0 6px var(--green);
+  }
+  .hero-live-row{
+    display:flex;justify-content:space-between;align-items:baseline;
+    padding:10px 0;border-bottom:1px solid var(--line);
+  }
+  .hero-live-row:last-child{border-bottom:0}
+  .hero-live-label{font-family:var(--f-mono);font-size:11px;color:var(--fg-3);letter-spacing:0.05em;text-transform:uppercase}
+  .hero-live-val{font-family:var(--f-mono);font-size:16px;font-weight:600;color:var(--fg)}
+  .hero-live-val small{font-size:0.7em;color:var(--fg-3);margin-left:2px;font-weight:400}
+  .hero-live-val.accent{color:var(--accent)}
+
+  @media (max-width:920px){
+    .hero-grid{grid-template-columns:1fr;gap:36px}
+    .ash-wordmark{font-size:84px}
+    .hero-tagline{font-size:24px}
+  }
+
+  /* ============================== ACTION CARD ============================== */
+  .action-section{padding:60px 0 40px}
+  .action-grid{display:grid;grid-template-columns:1fr 480px;gap:40px;align-items:start}
+  .action-aside{padding-top:8px}
+  .action-aside h2{
+    font-family:var(--f-display);font-size:28px;font-weight:700;letter-spacing:-0.02em;
+    margin-bottom:14px;
+  }
+  .action-aside p{font-size:14px;line-height:1.7;color:var(--fg-2);margin-bottom:14px}
+  .action-aside p b{color:var(--fg);font-weight:600}
+  .action-aside p em{color:var(--accent);font-style:normal;font-weight:600}
+
+  .card{
+    background:var(--bg-card);border:1px solid var(--line);border-radius:var(--r-lg);padding:24px;
+  }
+  .action-tabs{
+    display:grid;grid-template-columns:1fr 1fr;gap:6px;
+    background:var(--bg-input);border-radius:var(--r-md);padding:4px;margin-bottom:22px;
+  }
+  .action-tab{
+    height:42px;border-radius:var(--r-sm);
+    font-size:13px;font-weight:600;color:var(--fg-3);transition:all 0.15s;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;
+  }
+  .action-tab small{font-size:9.5px;color:var(--fg-4);font-weight:500;letter-spacing:0.05em;text-transform:uppercase}
+  .action-tab:hover{color:var(--fg-2)}
+  .action-tab.active{
+    background:var(--bg);color:var(--fg);
+    box-shadow:0 1px 3px rgba(0,0,0,0.5),inset 0 0 0 1px var(--line-2);
+  }
+  .action-tab.active small{color:var(--fg-3)}
+  .action-pane{display:none}
+  .action-pane.active{display:block}
+
+  .ibox{
+    background:var(--bg-input);border:1px solid var(--line);border-radius:var(--r-md);padding:18px;
+    transition:border-color 0.15s;
+  }
+  .ibox:focus-within{border-color:var(--accent)}
+  .ibox-label{
+    display:flex;justify-content:space-between;align-items:center;
+    font-family:var(--f-mono);font-size:11px;color:var(--fg-3);
+    letter-spacing:0.06em;text-transform:uppercase;margin-bottom:10px;
+  }
+  .ibox-row{display:flex;align-items:center;gap:12px}
+  .ibox-row input{flex:1;font-size:30px;font-weight:600;color:var(--fg);font-family:var(--f-display);letter-spacing:-0.01em}
+  .ibox-row input::placeholder{color:var(--fg-4)}
+  .token-chip{
+    display:inline-flex;align-items:center;gap:8px;
+    background:var(--bg-card);border:1px solid var(--line-2);
+    padding:8px 14px;border-radius:var(--r-sm);font-weight:600;
+  }
+  .token-chip-icon{
+    width:22px;height:22px;border-radius:50%;
+    background:linear-gradient(135deg,#627EEA,#3D5AC4);
+    display:flex;align-items:center;justify-content:center;
+    color:#fff;font-size:11px;font-weight:700;
+  }
+  .token-chip-icon.ash{background:radial-gradient(circle at 30% 30%,var(--accent),var(--accent-2))}
+  .ibox-foot{
+    display:flex;justify-content:space-between;align-items:center;
+    margin-top:10px;font-family:var(--f-mono);font-size:11px;color:var(--fg-3);
+  }
+  .ibox-foot .balance{display:flex;align-items:center;gap:4px}
+  .ibox-foot b{color:var(--fg-2);font-weight:500}
+  .max-chip{
+    margin-left:6px;padding:2px 7px;background:var(--accent-soft);
+    color:var(--accent);font-size:10px;font-weight:700;border-radius:var(--r-xs);
+    letter-spacing:0.05em;text-transform:uppercase;
+  }
+  .max-chip:hover{background:var(--accent);color:#fff}
+
+  .preview{
+    margin-top:14px;padding:14px 16px;background:var(--bg-input);
+    border-radius:var(--r-md);border:1px solid var(--line);
+  }
+  .preview-row{
+    display:flex;justify-content:space-between;align-items:center;
+    padding:5px 0;font-family:var(--f-mono);font-size:12px;color:var(--fg-3);
+  }
+  .preview-row b{color:var(--fg);font-weight:600}
+  .preview-row.accent b{color:var(--accent)}
+
+  .cta{
+    width:100%;height:54px;border-radius:var(--r-md);
+    background:var(--accent);color:#fff;font-size:15px;font-weight:600;
+    margin-top:16px;letter-spacing:0.005em;transition:all 0.15s;
+    box-shadow:0 6px 20px rgba(220,40,83,0.25);
+  }
+  .cta:hover:not(:disabled){background:var(--accent-2);transform:translateY(-1px)}
+  .cta:disabled{opacity:0.4;cursor:not-allowed;box-shadow:none}
+  .cta.secondary{
+    background:var(--bg-input);color:var(--fg);border:1px solid var(--line-2);
+    box-shadow:none;
+  }
+  .cta.secondary:hover:not(:disabled){background:var(--bg-hover);border-color:var(--line-strong);transform:none}
+
+  .cta-foot{
+    display:flex;justify-content:space-between;align-items:center;
+    margin-top:12px;padding:0 4px;
+    font-family:var(--f-mono);font-size:11px;color:var(--fg-3);
+  }
+  .cta-foot b{color:var(--fg-2);font-weight:500}
+
+  /* ─── Claim panel ─── */
+  .progress-bar{
+    margin-top:14px;height:8px;background:var(--bg-input);
+    border-radius:99px;overflow:hidden;border:1px solid var(--line);
+  }
+  .progress-fill{
+    height:100%;background:linear-gradient(90deg,var(--accent),#FF5673);
+    border-radius:99px;transition:width 0.4s ease;
+    box-shadow:0 0 10px rgba(220,40,83,0.5);
+  }
+  .progress-meta{
+    display:flex;justify-content:space-between;
+    margin-top:8px;font-family:var(--f-mono);font-size:11px;color:var(--fg-3);
+  }
+  .progress-meta b{color:var(--fg);font-weight:600}
+
+  .empty{
+    padding:40px 20px;text-align:center;color:var(--fg-3);font-size:13px;
+    background:var(--bg-input);border-radius:var(--r-md);
+    display:flex;flex-direction:column;align-items:center;gap:8px;
+  }
+  .empty-mark{font-size:24px;color:var(--fg-4);letter-spacing:-0.05em}
+
+  @media (max-width:920px){
+    .action-grid{grid-template-columns:1fr;gap:24px}
+  }
+
+  /* ============================== CHART SECTION ============================== */
+  .chart-section{padding:60px 0;border-bottom:1px solid var(--line)}
+  .chart-head{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:24px;flex-wrap:wrap;gap:16px}
+  .chart-head .left h2{font-family:var(--f-display);font-size:32px;font-weight:700;letter-spacing:-0.02em;line-height:1.1}
+  .chart-head .left .sub{font-family:var(--f-mono);font-size:11px;color:var(--fg-3);letter-spacing:0.1em;text-transform:uppercase;margin-top:6px}
+  .chart-tabs{display:flex;background:var(--bg-input);border-radius:var(--r-sm);padding:3px;gap:2px}
+  .chart-tab{
+    padding:6px 14px;font-size:12px;font-weight:600;color:var(--fg-3);
+    border-radius:var(--r-xs);transition:all 0.15s;
+  }
+  .chart-tab:hover{color:var(--fg-2)}
+  .chart-tab.active{background:var(--bg);color:var(--fg);box-shadow:inset 0 0 0 1px var(--line-2)}
+
+  .chart-card{
+    background:var(--bg-card);border:1px solid var(--line);border-radius:var(--r-lg);
+    padding:24px;position:relative;
+  }
+  .chart-stats{
+    display:grid;grid-template-columns:repeat(4,1fr);gap:18px;
+    margin-bottom:20px;padding-bottom:20px;border-bottom:1px solid var(--line);
+  }
+  .chart-stat .l{font-family:var(--f-mono);font-size:10px;color:var(--fg-3);letter-spacing:0.1em;text-transform:uppercase;font-weight:500;margin-bottom:6px}
+  .chart-stat .v{font-family:var(--f-mono);font-size:20px;font-weight:600;color:var(--fg)}
+  .chart-stat .v.accent{color:var(--accent)}
+  .chart-stat .s{font-size:11px;color:var(--fg-3);margin-top:2px}
+  @media (max-width:760px){.chart-stats{grid-template-columns:repeat(2,1fr)}}
+
+  .chart-canvas{
+    width:100%;height:280px;position:relative;
+  }
+  .chart-canvas svg{width:100%;height:100%;display:block}
+  .chart-canvas svg path.line{
+    filter:drop-shadow(0 0 6px rgba(220,40,83,0.4));
+  }
+  .chart-canvas svg path.line.draw{
+    stroke-dasharray:3000;
+    stroke-dashoffset:3000;
+    animation:drawLine 1.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  }
+  .chart-canvas svg path.area.draw{
+    opacity:0;
+    animation:fadeIn 1.6s ease-out 0.6s forwards;
+  }
+  @keyframes drawLine{to{stroke-dashoffset:0}}
+  @keyframes fadeIn{to{opacity:1}}
+
+  .chart-canvas svg circle.dot{
+    transition:r 0.2s, fill 0.2s;
+  }
+  .chart-canvas svg circle.dot:hover{r:5}
+  .chart-canvas svg circle.dot.latest{
+    fill:#FF5673;
+    filter:drop-shadow(0 0 6px rgba(220,40,83,0.9));
+  }
+  .chart-canvas svg circle.pulse-ring{
+    fill:none;stroke:#DC2853;stroke-width:1.5;
+    animation:pulseRing 2.2s ease-out infinite;transform-origin:center;
+  }
+  @keyframes pulseRing{
+    0%   {r:4;opacity:0.9;stroke-width:2}
+    100% {r:24;opacity:0;stroke-width:0.5}
+  }
+
+  .chart-empty{
+    height:280px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;
+    color:var(--fg-3);font-size:13px;
+  }
+  .chart-empty .mk{font-size:32px;color:var(--fg-4);letter-spacing:-0.05em;margin-bottom:6px}
+  .chart-empty b{color:var(--fg);font-weight:600}
+
+  .chart-tip{
+    position:absolute;background:var(--bg-elev);border:1px solid var(--line-strong);
+    border-radius:var(--r-sm);padding:8px 12px;pointer-events:none;
+    font-family:var(--f-mono);font-size:11px;line-height:1.5;
+    box-shadow:0 4px 16px rgba(0,0,0,0.6);z-index:10;display:none;
+  }
+  .chart-tip b{color:var(--fg);font-weight:600}
+  .chart-tip .l{color:var(--fg-3);text-transform:uppercase;letter-spacing:0.05em;font-size:9px;margin-bottom:2px}
+
+  .chart-live-badge{
+    display:inline-flex;align-items:center;gap:6px;padding:3px 10px;
+    background:rgba(46,184,114,0.1);border:1px solid rgba(46,184,114,0.25);
+    border-radius:99px;font-family:var(--f-mono);font-size:10px;
+    color:var(--green);letter-spacing:0.1em;text-transform:uppercase;font-weight:600;
+    margin-left:10px;vertical-align:middle;
+  }
+  .chart-live-badge::before{
+    content:'';width:6px;height:6px;border-radius:50%;background:var(--green);
+    box-shadow:0 0 8px var(--green);animation:pulse 1.6s ease-in-out infinite;
+  }
+
+  /* Counter tick animation */
+  .tick-flash{animation:tickFlash 0.6s ease-out}
+  @keyframes tickFlash{
+    0%   {color:var(--accent);text-shadow:0 0 12px rgba(220,40,83,0.8)}
+    100% {color:inherit;text-shadow:none}
+  }
+
+  /* ============================== HOW IT WORKS ============================== */
+  .how-section{padding:60px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+  .how-head{margin-bottom:40px}
+  .how-eyebrow{
+    font-family:var(--f-mono);font-size:11px;color:var(--fg-3);
+    letter-spacing:0.18em;text-transform:uppercase;font-weight:500;margin-bottom:14px;
+  }
+  .how-title{
+    font-family:var(--f-display);font-size:40px;font-weight:700;letter-spacing:-0.02em;
+    max-width:680px;line-height:1.1;
+  }
+  .how-title em{color:var(--accent);font-style:normal}
+  .how-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+  .how-card{
+    background:var(--bg-card);border:1px solid var(--line);border-radius:var(--r-lg);
+    padding:28px;position:relative;overflow:hidden;
+  }
+  .how-card::before{
+    content:'';position:absolute;top:0;left:0;right:0;height:1px;
+    background:linear-gradient(90deg,transparent,var(--accent),transparent);
+    opacity:0;transition:opacity 0.3s;
+  }
+  .how-card:hover::before{opacity:1}
+  .how-num{
+    font-family:var(--f-mono);font-size:11px;color:var(--accent);
+    letter-spacing:0.18em;font-weight:600;margin-bottom:14px;
+  }
+  .how-card h3{font-family:var(--f-display);font-size:20px;font-weight:700;margin-bottom:10px;letter-spacing:-0.01em}
+  .how-card p{font-size:13px;color:var(--fg-2);line-height:1.65}
+  .how-card p b{color:var(--fg);font-weight:600}
+  .how-formula{
+    margin-top:14px;padding:10px 12px;background:var(--bg-input);
+    border-radius:var(--r-sm);font-family:var(--f-mono);font-size:11px;
+    color:var(--fg-2);border:1px solid var(--line);
+  }
+  @media (max-width:920px){.how-grid{grid-template-columns:1fr}.how-title{font-size:32px}}
+
+  /* ============================== POSITION GRID ============================== */
+  .pos-section{padding:50px 0;border-bottom:1px solid var(--line)}
+  .pos-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:24px}
+  .pos-head h2{font-family:var(--f-display);font-size:24px;font-weight:700;letter-spacing:-0.01em}
+  .pos-head .addr{font-family:var(--f-mono);font-size:11px;color:var(--fg-3)}
+  .pos-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+  .pos-card{
+    background:var(--bg-card);border:1px solid var(--line);border-radius:var(--r-md);padding:18px 20px;
+  }
+  .pos-card .l{font-family:var(--f-mono);font-size:10px;color:var(--fg-3);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:8px;font-weight:500}
+  .pos-card .v{font-family:var(--f-mono);font-size:22px;font-weight:600;color:var(--fg);margin-bottom:4px}
+  .pos-card .s{font-family:var(--f-mono);font-size:11px;color:var(--fg-3)}
+  .pos-card .s.green{color:var(--green)}
+  .pos-card .s.accent{color:var(--accent)}
+  @media (max-width:920px){.pos-grid{grid-template-columns:repeat(2,1fr)}}
+
+  /* ============================== CONTRACTS ============================== */
+  .contracts-section{padding:50px 0;border-bottom:1px solid var(--line)}
+  .contracts-section h2{font-family:var(--f-display);font-size:24px;font-weight:700;letter-spacing:-0.01em;margin-bottom:18px}
+  .contract-row{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:14px 18px;background:var(--bg-card);border:1px solid var(--line);
+    border-radius:var(--r-md);margin-bottom:8px;transition:border-color 0.15s;
+  }
+  .contract-row:hover{border-color:var(--line-strong)}
+  .contract-name{display:flex;align-items:center;gap:12px}
+  .contract-name .label{font-weight:600;font-size:14px}
+  .contract-name .desc{font-size:11px;color:var(--fg-3);font-family:var(--f-mono);letter-spacing:0.05em;text-transform:uppercase;margin-top:2px}
+  .contract-actions{display:flex;align-items:center;gap:6px}
+  .addr-mono{
+    font-family:var(--f-mono);font-size:12px;color:var(--fg-2);
+    padding:6px 10px;background:var(--bg-input);border-radius:var(--r-sm);
+  }
+  .icon-btn{
+    width:32px;height:32px;border-radius:var(--r-sm);
+    background:var(--bg-input);border:1px solid var(--line);
+    display:inline-flex;align-items:center;justify-content:center;
+    color:var(--fg-3);transition:all 0.15s;
+  }
+  .icon-btn:hover{background:var(--bg-hover);color:var(--fg);border-color:var(--line-strong)}
+  .icon-btn svg{width:14px;height:14px}
+
+  /* ============================== FOOTER ============================== */
+  footer{padding:40px 0;text-align:center}
+  .footer-links{display:flex;justify-content:center;gap:8px;margin-bottom:18px}
+  .footer-disc{font-family:var(--f-mono);font-size:10px;color:var(--fg-4);letter-spacing:0.1em;text-transform:uppercase;line-height:1.7;max-width:560px;margin:0 auto}
+
+  /* ============================== TOAST ============================== */
+  .toast-stack{position:fixed;bottom:24px;right:24px;z-index:100;display:flex;flex-direction:column;gap:10px;max-width:360px}
+  .toast{
+    background:var(--bg-card);border:1px solid var(--line-strong);border-radius:var(--r-md);
+    padding:14px 16px;font-size:13px;display:flex;align-items:flex-start;gap:10px;
+    box-shadow:0 10px 40px rgba(0,0,0,0.4);
+    animation:slideIn 0.3s ease, slideOut 0.3s ease 5s forwards;
+  }
+  .toast.success{border-left:3px solid var(--green)}
+  .toast.error{border-left:3px solid var(--danger)}
+  .toast.info{border-left:3px solid var(--accent)}
+  .toast .body{flex:1}
+  .toast .body b{display:block;margin-bottom:2px;color:var(--fg)}
+  .toast .body span{color:var(--fg-2);font-size:12px;line-height:1.5}
+  .toast a{color:var(--accent);font-size:11px;text-decoration:underline}
+  @keyframes slideIn{from{transform:translateX(20px);opacity:0}to{transform:none;opacity:1}}
+  @keyframes slideOut{to{transform:translateX(20px);opacity:0;height:0;padding:0;margin:0;border:0}}
+
+  /* ============================== UTIL ============================== */
+  .skel{
+    background:linear-gradient(90deg,var(--bg-input) 0%,var(--bg-hover) 50%,var(--bg-input) 100%);
+    background-size:200% 100%;animation:shimmer 1.4s infinite;border-radius:4px;
+    color:transparent;
+  }
+  @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+
+  /* ============================== ALERT ============================== */
+  .alert{
+    margin-top:14px;padding:12px 14px;border-radius:var(--r-sm);
+    font-size:12px;display:flex;gap:10px;align-items:flex-start;line-height:1.55;
+  }
+  .alert.warn{background:rgba(232,163,61,0.08);border:1px solid rgba(232,163,61,0.25);color:#E8A33D}
+  .alert.info{background:var(--accent-soft);border:1px solid rgba(220,40,83,0.25);color:#FF6B8A}
+  .alert b{color:var(--fg)}
+</style>
+</head>
+
+<body>
+
+<!-- Atmospheric layers -->
+<div class="bg-mesh"></div>
+<div class="bg-grain"></div>
+<div class="bg-vignette"></div>
+<div class="embers" id="embers"></div>
+
+<!-- ═══════════════════ NAV ═══════════════════ -->
+<nav class="nav">
+  <div class="nav-inner">
+    <div class="brand">
+      <img class="mark" src="logo.png" alt="ASH"/>
+      <span><span class="dim">$</span>ASH</span>
+    </div>
+    <div class="nav-spacer"></div>
+    <div class="nav-links">
+      <a class="nav-link" href="#how">How it works</a>
+      <a class="nav-link" id="navBuyAsh" href="#" target="_blank" rel="noopener">
+        Buy ASH <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17L17 7M17 7H7M17 7V17"/></svg>
+      </a>
+      <a class="nav-link" href="https://x.com/ashethereumV4/" target="_blank" rel="noopener" title="@ashethereumV4 on X">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+        <span>Follow</span>
+      </a>
+    </div>
+    <button class="btn btn-primary" id="connectBtn" onclick="connect()">Connect</button>
+  </div>
+</nav>
+
+<!-- ═══════════════════ HERO ═══════════════════ -->
+<section class="hero">
+  <div class="container">
+    <div class="hero-eyebrow"><span class="dot"></span>UNISWAP V4 · ETHEREUM MAINNET · NO TEAM ALLOC</div>
+    <div class="hero-grid">
+      <div>
+        <h1 class="ash-wordmark"><span class="dim">$</span>ASH</h1>
+        <p class="hero-tagline">Pay <b>ETH</b>. Earn <em>2× back</em>.</p>
+        <p class="hero-desc">A 1% V4 hook tax accrues into a continuous ETH dividend pool. <b>Enter</b> with ETH — protocol market-buys ASH and burns it. You're then paid back from every future swap, up to a hard 2× cap. Claim any time. No team allocation, no presale, no off-chain dependencies.</p>
+        <div class="hero-cta-row">
+          <a href="#enter" class="hero-cta primary">Enter now ↓</a>
+          <a id="heroBuyAsh" href="#" target="_blank" rel="noopener" class="hero-cta ghost">Buy ASH ↗</a>
+        </div>
+
+        <div class="price-strip">
+          <div class="price-strip-item">
+            <span class="l">ASH price</span>
+            <span class="v" id="psPrice">$<span class="skel">0.0000</span></span>
+          </div>
+          <div class="div"></div>
+          <div class="price-strip-item">
+            <span class="l">Market cap</span>
+            <span class="v" id="psMcap">$<span class="skel">0.00M</span></span>
+          </div>
+          <div class="div"></div>
+          <div class="price-strip-item">
+            <span class="l">ETH/USD</span>
+            <span class="v" id="psEthUsd">$<span class="skel">0,000</span></span>
+          </div>
+          <div class="div"></div>
+          <div class="price-strip-item">
+            <span class="l">Pool TVL</span>
+            <span class="v accent" id="psTvl">$<span class="skel">0,000</span></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="hero-live">
+        <div class="hero-live-title">
+          <span>Live · Block</span>
+          <span class="live" id="liveBlock">—</span>
+        </div>
+        <div class="hero-live-row">
+          <span class="hero-live-label">ASH burned</span>
+          <span class="hero-live-val" id="hAshBurned"><span class="skel">0,000,000</span></span>
+        </div>
+        <div class="hero-live-row">
+          <span class="hero-live-label">ETH entered</span>
+          <span class="hero-live-val" id="hEthEntered"><span class="skel">000.000</span></span>
+        </div>
+        <div class="hero-live-row">
+          <span class="hero-live-label">ETH paid out</span>
+          <span class="hero-live-val accent" id="hEthPaid"><span class="skel">000.000</span></span>
+        </div>
+        <div class="hero-live-row">
+          <span class="hero-live-label">Active cap (Σ)</span>
+          <span class="hero-live-val" id="hActiveShares"><span class="skel">000.000</span></span>
+        </div>
+        <div class="hero-live-row">
+          <span class="hero-live-label">Dev tax · cumulative</span>
+          <span class="hero-live-val" id="hDevTax"><span class="skel">0.000</span></span>
+        </div>
+        <div class="hero-live-row">
+          <span class="hero-live-label">ASH supply (live)</span>
+          <span class="hero-live-val" id="hSupply"><span class="skel">0.00</span></span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════ ACTION ═══════════════════ -->
+<section class="action-section" id="enter">
+  <div class="container">
+    <div class="action-grid">
+
+      <!-- Aside copy -->
+      <div class="action-aside">
+        <div style="font-family:var(--f-mono);font-size:11px;color:var(--fg-3);letter-spacing:0.18em;text-transform:uppercase;margin-bottom:14px">
+          The Loop
+        </div>
+        <h2>One transaction. Two streams forever.</h2>
+        <p>When you <b>Enter</b>, your ETH is used in a single atomic transaction to <b>buy ASH from the V4 pool and send it to <em>0x…dEaD</em></b>. Real burn, real deflation, real upward price pressure.</p>
+        <p>In return, the protocol grants you a <b>2× ETH cap</b>. Every future swap that happens through the V4 pool routes 0.7% of its volume into a dividend pool, of which <b>you receive a proportional share based on your remaining cap</b>.</p>
+        <p>You can <b>claim any time, any amount</b>. The cap is the only ceiling — claim 0.001 ETH today, 0.5 ETH next week, until your accumulated withdrawals reach 2× your deposit. Then your share goes to zero and remaining users earn faster.</p>
+      </div>
+
+      <!-- Action card -->
+      <div class="card">
+        <div class="action-tabs">
+          <button class="action-tab active" data-tab="enter" onclick="setAction('enter',this)">
+            <span>Enter</span>
+            <small>burn ASH · lock 2× cap</small>
+          </button>
+          <button class="action-tab" data-tab="claim" onclick="setAction('claim',this)">
+            <span>Claim</span>
+            <small>withdraw earned</small>
+          </button>
+        </div>
+
+        <!-- ENTER PANE -->
+        <div class="action-pane active" id="pane-enter">
+          <div class="ibox">
+            <div class="ibox-label">
+              <span>You spend (burns ASH at market)</span>
+              <span id="enterUsd" style="color:var(--fg-3)">~ $—</span>
+            </div>
+            <div class="ibox-row">
+              <input type="number" id="enterAmt" placeholder="0.0" step="0.001" oninput="updateEnterPreview()">
+              <div class="token-chip">
+                <div class="token-chip-icon">Ξ</div>ETH
+              </div>
+            </div>
+            <div class="ibox-foot">
+              <span>Min entry: <b>0.001 ETH</b></span>
+              <div class="balance">
+                <span>Balance:</span>
+                <b id="ethBalance">—</b>
+                <span style="color:var(--fg-3);font-size:0.95em">ETH</span>
+                <button class="max-chip" onclick="setEnterMax()">MAX</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="preview">
+            <div class="preview-row">
+              <span>Will burn ≈</span>
+              <b id="willBurnAsh">0 ASH</b>
+            </div>
+            <div class="preview-row">
+              <span>Cap added (2×)</span>
+              <b id="capAdd">0.000 Ξ</b>
+            </div>
+            <div class="preview-row accent">
+              <span>Total claimable lifetime</span>
+              <b id="totalCap">0.000 Ξ</b>
+            </div>
+          </div>
+
+          <button class="cta" id="enterCta" onclick="executeEnter()" disabled>Connect wallet</button>
+
+          <div class="cta-foot">
+            <span>Slippage: <b>auto</b></span>
+            <span>Gas: <b>~ 280K</b></span>
+            <span style="color:var(--green)">● MEV protected</span>
+          </div>
+        </div>
+
+        <!-- CLAIM PANE -->
+        <div class="action-pane" id="pane-claim">
+          <div id="claimEmpty" class="empty">
+            <span class="empty-mark">— ash —</span>
+            <span>Connect wallet to view your position</span>
+          </div>
+
+          <div id="claimContent" style="display:none">
+            <div class="preview">
+              <div class="preview-row">
+                <span>Total deposited</span>
+                <b id="cTotalDep">0.000 Ξ</b>
+              </div>
+              <div class="preview-row">
+                <span>Cap remaining</span>
+                <b id="cCapRem">0.000 Ξ</b>
+              </div>
+              <div class="preview-row">
+                <span>Claimed so far</span>
+                <b id="cWithdrawn">0.000 Ξ</b>
+              </div>
+              <div class="preview-row accent">
+                <span>Pending now</span>
+                <b id="cPending">0.000 Ξ</b>
+              </div>
+            </div>
+
+            <div class="progress-bar">
+              <div class="progress-fill" id="capProgress" style="width:0%"></div>
+            </div>
+            <div class="progress-meta">
+              <span>Progress to 2× exit</span>
+              <b id="progressPct">0%</b>
+            </div>
+
+            <div class="ibox" style="margin-top:14px">
+              <div class="ibox-label">
+                <span>Claim amount</span>
+              </div>
+              <div class="ibox-row">
+                <input type="number" id="claimAmt" placeholder="0.0" step="0.001">
+                <div class="token-chip">
+                  <div class="token-chip-icon">Ξ</div>ETH
+                </div>
+              </div>
+              <div class="ibox-foot">
+                <span style="color:var(--fg-3)">Or claim all available</span>
+                <div class="balance">
+                  <button class="max-chip" onclick="setClaimMax()">MAX</button>
+                </div>
+              </div>
+            </div>
+
+            <button class="cta" onclick="executeClaim()">Claim</button>
+            <button class="cta secondary" onclick="executeClaimAll()" style="margin-top:8px">Claim all pending</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════ BURN CHART ═══════════════════ -->
+<section class="chart-section" id="chart">
+  <div class="container">
+    <div class="chart-head">
+      <div class="left">
+        <h2>The Burn Curve <span class="chart-live-badge">LIVE</span></h2>
+        <div class="sub">Cumulative on-chain · auto-updating from <code>Entered</code> events</div>
+      </div>
+      <div class="chart-tabs">
+        <button class="chart-tab active" data-metric="ash" onclick="setChartMetric('ash',this)">ASH burned</button>
+        <button class="chart-tab" data-metric="eth" onclick="setChartMetric('eth',this)">ETH entered</button>
+        <button class="chart-tab" data-metric="paid" onclick="setChartMetric('paid',this)">ETH paid out</button>
+      </div>
+    </div>
+
+    <div class="chart-card">
+      <div class="chart-stats">
+        <div class="chart-stat">
+          <div class="l">Cumulative burned</div>
+          <div class="v" id="cstAshTotal">0</div>
+          <div class="s" id="cstAshUsd">$0.00</div>
+        </div>
+        <div class="chart-stat">
+          <div class="l">Total burns</div>
+          <div class="v" id="cstBurnCount">0</div>
+          <div class="s">enter() calls</div>
+        </div>
+        <div class="chart-stat">
+          <div class="l">Avg burn size</div>
+          <div class="v" id="cstAvgBurn">— Ξ</div>
+          <div class="s">per transaction</div>
+        </div>
+        <div class="chart-stat">
+          <div class="l">Last 24h burns</div>
+          <div class="v accent" id="cst24h">0</div>
+          <div class="s" id="cst24hVol">0.000 Ξ entered</div>
+        </div>
+      </div>
+
+      <div class="chart-canvas" id="chartCanvas">
+        <div class="chart-empty" id="chartEmpty">
+          <span class="mk">— ash —</span>
+          <b>Awaiting first burn</b>
+          <span>Be the first to enter and ignite the curve</span>
+        </div>
+      </div>
+      <div class="chart-tip" id="chartTip"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════ HOW IT WORKS ═══════════════════ -->
+<section class="how-section" id="how">
+  <div class="container">
+    <div class="how-head">
+      <div class="how-eyebrow">Mechanism</div>
+      <h1 class="how-title">A self-reinforcing <em>burn loop</em>, denominated in ETH.</h1>
+    </div>
+
+    <div class="how-grid">
+      <div class="how-card">
+        <div class="how-num">01</div>
+        <h3>Every swap pays 1% tax</h3>
+        <p>The V4 hook intercepts every swap on the ASH/ETH pool. <b>0.3% goes to dev</b> for maintenance, <b>0.7% accumulates into the dividend pool</b>. ASH-side taxes auto-convert to ETH inside the same transaction.</p>
+        <div class="how-formula">tax_pool += 0.7% × swap_volume</div>
+      </div>
+      <div class="how-card">
+        <div class="how-num">02</div>
+        <h3>Enter X ETH → burn ASH</h3>
+        <p>Calling <code>enter()</code> with X ETH market-buys ASH from the V4 pool and burns it to <b>0x…dEaD</b>. You receive a <b>2X ETH cap</b> on lifetime claimable rewards. Your share of future dividends = your remaining cap.</p>
+        <div class="how-formula">share<sub>i</sub> = capRemaining<sub>i</sub> / Σ capRemaining<sub>j</sub></div>
+      </div>
+      <div class="how-card">
+        <div class="how-num">03</div>
+        <h3>Claim continuously</h3>
+        <p>Withdraw any amount, any time, up to your pending dividends. Your cap and share decrease as you claim. <b>When cumulative withdrawals reach 2X, you exit</b> — your share drops to zero and remaining users' shares grow.</p>
+        <div class="how-formula">pending = (dPS × shares + corr) / 1e36 − withdrawn</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════ POSITION ═══════════════════ -->
+<section class="pos-section" id="position">
+  <div class="container">
+    <div class="pos-head">
+      <h2>Your position</h2>
+      <span class="addr" id="posAddr">— not connected —</span>
+    </div>
+
+    <div class="pos-grid">
+      <div class="pos-card">
+        <div class="l">ASH balance</div>
+        <div class="v" id="pAshBal">—</div>
+        <div class="s" id="pAshBalDesc">connect to view</div>
+      </div>
+      <div class="pos-card">
+        <div class="l">Total deposited</div>
+        <div class="v" id="pDeposited">—</div>
+        <div class="s" id="pDepositedDesc">cumulative ETH in</div>
+      </div>
+      <div class="pos-card">
+        <div class="l">Cumulative withdrawn</div>
+        <div class="v" id="pWithdrawn">—</div>
+        <div class="s green" id="pRoi">+0%</div>
+      </div>
+      <div class="pos-card">
+        <div class="l">Pending dividend</div>
+        <div class="v" id="pPending">—</div>
+        <div class="s accent" id="pPendingDesc">claim any time</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════ CONTRACTS ═══════════════════ -->
+<section class="contracts-section">
+  <div class="container">
+    <h2>Contracts on Ethereum</h2>
+
+    <div class="contract-row">
+      <div class="contract-name">
+        <div>
+          <div class="label">ASH Token</div>
+          <div class="desc">ERC-20 · 1B fixed supply</div>
+        </div>
+      </div>
+      <div class="contract-actions">
+        <span class="addr-mono" id="ashTokenAddr">—</span>
+        <button class="icon-btn" onclick="copyAddr('ASH_TOKEN')" title="Copy">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        </button>
+        <a class="icon-btn" id="ashTokenScan" target="_blank" rel="noopener" title="Etherscan">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"/></svg>
+        </a>
+      </div>
+    </div>
+
+    <div class="contract-row">
+      <div class="contract-name">
+        <div>
+          <div class="label">Protocol (V4 Hook)</div>
+          <div class="desc">Burn engine · enter / claim</div>
+        </div>
+      </div>
+      <div class="contract-actions">
+        <span class="addr-mono" id="ashProtoAddr">—</span>
+        <button class="icon-btn" onclick="copyAddr('ASH_PROTOCOL')" title="Copy">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        </button>
+        <a class="icon-btn" id="ashProtoScan" target="_blank" rel="noopener" title="Etherscan">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"/></svg>
+        </a>
+      </div>
+    </div>
+
+    <div class="contract-row">
+      <div class="contract-name">
+        <div>
+          <div class="label">Hook Factory</div>
+          <div class="desc">CREATE2 deployer · retired post-launch</div>
+        </div>
+      </div>
+      <div class="contract-actions">
+        <span class="addr-mono" id="ashFactoryAddr">—</span>
+        <button class="icon-btn" onclick="copyAddr('HOOK_FACTORY')" title="Copy">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        </button>
+        <a class="icon-btn" id="ashFactoryScan" target="_blank" rel="noopener" title="Etherscan">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"/></svg>
+        </a>
+      </div>
+    </div>
+
+    <div class="alert info" style="margin-top:18px">
+      <span>ⓘ</span>
+      <div>
+        <b>Verify before interacting.</b> Always cross-check addresses against the official X account
+        <a href="https://x.com/ashethereumV4/" target="_blank" rel="noopener" style="color:#FF6B8A;text-decoration:underline">@ashethereumV4</a>
+        and the contract source on Etherscan. The protocol has no admin keys post-launch.
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════ FOOTER ═══════════════════ -->
+<footer>
+  <div class="container">
+    <div class="footer-links">
+      <a class="icon-btn" href="https://x.com/ashethereumV4/" target="_blank" rel="noopener" title="X">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+      </a>
+      <a class="icon-btn" id="footerEtherscan" target="_blank" rel="noopener" title="Etherscan">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"/></svg>
+      </a>
+      <a class="icon-btn" id="footerUni" target="_blank" rel="noopener" title="Uniswap">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L3 7v10l9 5 9-5V7l-9-5z"/></svg>
+      </a>
+    </div>
+    <div class="footer-disc">
+      $ASH is an experimental on-chain protocol. No team allocation. No presale. No off-chain dependencies.<br>
+      Interact at your own risk. Smart contracts are immutable; bugs cannot be patched. Verified on Etherscan.
+    </div>
+  </div>
+</footer>
+
+<div class="toast-stack" id="toastStack"></div>
+
+
+<!-- ═══════════════════ JS ═══════════════════ -->
+<script src="https://cdn.jsdelivr.net/npm/ethers@6.13.4/dist/ethers.umd.min.js"></script>
+<script>
+//============================== CONFIG ==============================//
+const ADDR = {
+  ASH_TOKEN:     '0xDbfBAbAaF97Aac345a7dECf057495F0B80889B7f',
+  ASH_PROTOCOL:  '0x298825280110714eB194809dcEd13c1157E30088',
+  HOOK_FACTORY:  '0x6Dc977cf3b392d615a8E55FEE3B8A43228B0eeB4',
+  POOL_MANAGER:  '0x000000000004444c5dc75cB358380D2e3dE08A90',
+  STATE_VIEW:    '0x7fFE42C4a5DEeA5b0feC41C94C136Cf115597227',  // V4 mainnet StateView
+  ETH_USD_FEED:  '0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419',  // Chainlink ETH/USD
+};
+const SCAN = 'https://etherscan.io/address';
+const UNI_SWAP = `https://app.uniswap.org/swap?inputCurrency=ETH&outputCurrency=${ADDR.ASH_TOKEN}&chain=mainnet`;
+const X_URL    = 'https://x.com/ashethereumV4/';
+const FALLBACK_RPC = 'https://eth.llamarpc.com';
+const TOTAL_SUPPLY = 1_000_000_000;  // for mcap calc
+
+//============================== ABIs (minimal) ======================//
+const ASH_TOKEN_ABI = [
+  'function balanceOf(address) view returns (uint256)',
+  'function totalSupply() view returns (uint256)',
+  'function decimals() view returns (uint8)',
+  'function symbol() view returns (string)'
+];
+const ASH_PROTOCOL_ABI = [
+  'function pendingDividend(address) view returns (uint256)',
+  'function accountOf(address) view returns (uint256 capRemaining, uint256 shares, uint256 withdrawn, uint256 totalDeposited, uint256 pending)',
+  'function stats() view returns (uint256 totalShares, uint256 totalEntered, uint256 totalPaid, uint256 totalAshBurned, uint256 totalDevTax, uint256 dividendPerShare, uint256 contractBalance)',
+  'function MULTIPLIER() view returns (uint256)',
+  'function MIN_ENTRY() view returns (uint256)',
+  'function POOL_KEY() view returns (address currency0, address currency1, uint24 fee, int24 tickSpacing, address hooks)',
+  'function enter() payable',
+  'function claim(uint256)',
+  'function claimAll()',
+  'event Entered(address indexed user, uint256 ethSpent, uint256 ashBurned, uint256 newCap)',
+  'event Claimed(address indexed user, uint256 amount, uint256 capRemaining)',
+  'event Exited(address indexed user, uint256 totalReceived)'
+];
+const STATE_VIEW_ABI = [
+  'function getSlot0(bytes32 poolId) view returns (uint160 sqrtPriceX96, int24 tick, uint24 protocolFee, uint24 lpFee)',
+  'function getLiquidity(bytes32 poolId) view returns (uint128 liquidity)'
+];
+const CHAINLINK_ABI = [
+  'function latestAnswer() view returns (int256)',
+  'function decimals() view returns (uint8)'
+];
+
+//============================== STATE ===============================//
+let provider = null;        // wallet provider (signer)
+let readProvider = null;    // read-only fallback
+let signer = null;
+let userAddr = null;
+let chainId = null;
+
+let ashToken = null;        // contract instances (with signer)
+let ashProtocol = null;
+let ashTokenRO = null;      // read-only
+let ashProtocolRO = null;
+let stateViewRO = null;
+let oracleRO = null;
+
+let cachedAshPriceEth = null;
+let cachedEthUsd = null;
+let cachedPoolId = null;
+let cachedPoolKey = null;
+let lastBlock = 0;
+
+let burnEvents = [];        // {block, time, ethSpent, ashBurned, txHash}
+let chartMetric = 'ash';
+let lastRenderedCount = 0;  // to detect new data for animations
+let liveListenerAttached = false;
+
+//============================== INIT ================================//
+async function init(){
+  // populate static UI
+  document.getElementById('navBuyAsh').href = UNI_SWAP;
+  document.getElementById('heroBuyAsh').href = UNI_SWAP;
+  document.getElementById('footerUni').href = UNI_SWAP;
+  document.getElementById('footerEtherscan').href = `${SCAN}/${ADDR.ASH_PROTOCOL}`;
+
+  document.getElementById('ashTokenAddr').textContent = short(ADDR.ASH_TOKEN);
+  document.getElementById('ashProtoAddr').textContent = short(ADDR.ASH_PROTOCOL);
+  document.getElementById('ashFactoryAddr').textContent = short(ADDR.HOOK_FACTORY);
+  document.getElementById('ashTokenScan').href = `${SCAN}/${ADDR.ASH_TOKEN}`;
+  document.getElementById('ashProtoScan').href = `${SCAN}/${ADDR.ASH_PROTOCOL}`;
+  document.getElementById('ashFactoryScan').href = `${SCAN}/${ADDR.HOOK_FACTORY}`;
+
+  // build read-only provider for stats even when no wallet
+  try {
+    readProvider = new ethers.JsonRpcProvider(FALLBACK_RPC);
+    ashTokenRO    = new ethers.Contract(ADDR.ASH_TOKEN, ASH_TOKEN_ABI, readProvider);
+    ashProtocolRO = new ethers.Contract(ADDR.ASH_PROTOCOL, ASH_PROTOCOL_ABI, readProvider);
+    stateViewRO   = new ethers.Contract(ADDR.STATE_VIEW, STATE_VIEW_ABI, readProvider);
+    oracleRO      = new ethers.Contract(ADDR.ETH_USD_FEED, CHAINLINK_ABI, readProvider);
+  } catch(e) {
+    console.warn('readProvider failed:', e);
+  }
+
+  // try silent reconnect
+  if (window.ethereum) {
+    try {
+      const accs = await window.ethereum.request({ method: 'eth_accounts' });
+      if (accs && accs.length) await onConnected(accs[0]);
+    } catch {}
+    window.ethereum.on?.('accountsChanged', accs => {
+      if (!accs.length) disconnect();
+      else onConnected(accs[0]);
+    });
+    window.ethereum.on?.('chainChanged', () => location.reload());
+  }
+
+  spawnEmbers();
+  refresh();
+  setInterval(refresh, 6000);  // fast refresh for real-time feel
+}
+
+//============================== CONNECT =============================//
+async function connect(){
+  if (!window.ethereum) {
+    toast('error','No wallet detected','Install MetaMask, OKX, Rabby, or another EVM wallet.');
+    return;
+  }
+  try {
+    const accs = await window.ethereum.request({ method: 'eth_requestAccounts' });
+    if (accs && accs.length) await onConnected(accs[0]);
+  } catch(e) {
+    toast('error','Connection rejected', e.message || '');
+  }
+}
+
+async function onConnected(addr){
+  userAddr = ethers.getAddress(addr);
+  provider = new ethers.BrowserProvider(window.ethereum);
+  signer = await provider.getSigner();
+  const net = await provider.getNetwork();
+  chainId = Number(net.chainId);
+
+  ashToken    = new ethers.Contract(ADDR.ASH_TOKEN, ASH_TOKEN_ABI, signer);
+  ashProtocol = new ethers.Contract(ADDR.ASH_PROTOCOL, ASH_PROTOCOL_ABI, signer);
+
+  document.getElementById('connectBtn').textContent = short(userAddr);
+  document.getElementById('posAddr').textContent = short(userAddr);
+  document.getElementById('enterCta').disabled = false;
+  document.getElementById('enterCta').textContent = 'Enter';
+
+  if (chainId !== 1) {
+    toast('error','Wrong network','This protocol is on Ethereum mainnet (chain 1). You are on chain ' + chainId);
+  }
+  refresh();
+}
+
+function disconnect(){
+  userAddr = null;
+  signer = null;
+  provider = null;
+  ashToken = null;
+  ashProtocol = null;
+  document.getElementById('connectBtn').textContent = 'Connect';
+  document.getElementById('posAddr').textContent = '— not connected —';
+  document.getElementById('enterCta').disabled = true;
+  document.getElementById('enterCta').textContent = 'Connect wallet';
+  document.getElementById('claimEmpty').style.display = '';
+  document.getElementById('claimContent').style.display = 'none';
+  refresh();
+}
+
+//============================== READS ===============================//
+async function refresh(){
+  await Promise.all([
+    refreshPrices().catch(e => console.warn('prices:', e.message)),
+    refreshGlobalStats().catch(e => console.warn('stats:', e.message)),
+    refreshUser().catch(e => console.warn('user:', e.message)),
+    refreshBlock().catch(()=>{}),
+    refreshBurnEvents().catch(e => console.warn('events:', e.message)),
+  ]);
+}
+
+async function refreshPrices(){
+  // ETH/USD from Chainlink
+  if (oracleRO) {
+    try {
+      const [answer, dec] = await Promise.all([
+        oracleRO.latestAnswer(),
+        oracleRO.decimals(),
+      ]);
+      cachedEthUsd = Number(answer) / Math.pow(10, Number(dec));
+      setText('psEthUsd', '$' + Math.round(cachedEthUsd).toLocaleString());
+    } catch(e) {
+      console.warn('eth/usd:', e.message);
+    }
+  }
+
+  // V4 pool sqrtPriceX96 → ASH price in ETH
+  const c = ashProtocolRO || ashProtocol;
+  if (!c || !stateViewRO) return;
+  try {
+    if (!cachedPoolKey) {
+      const k = await c.POOL_KEY();
+      cachedPoolKey = {
+        currency0: k.currency0, currency1: k.currency1,
+        fee: Number(k.fee), tickSpacing: Number(k.tickSpacing), hooks: k.hooks,
+      };
+      cachedPoolId = computePoolId(cachedPoolKey);
+    }
+    if (cachedPoolKey.currency0 !== ethers.ZeroAddress) {
+      // unexpected currency order — protocol expects ETH (0x0) as currency0
+      console.warn('Unexpected currency0:', cachedPoolKey.currency0);
+      return;
+    }
+    const slot0 = await stateViewRO.getSlot0(cachedPoolId);
+    const sqrtPriceX96 = slot0[0];
+
+    // currency0 = ETH, currency1 = ASH
+    // sqrtPriceX96 = sqrt(ASH/ETH) * 2^96
+    // price ASH per ETH = (sqrt / 2^96)^2
+    // ASH price in ETH = 1 / (ASH per ETH) = 2^192 / sqrt^2
+    if (sqrtPriceX96 === 0n) {
+      // pool not initialized
+      setText('psPrice', '— pool init pending');
+      setText('psMcap', '—');
+      return;
+    }
+    const Q96 = 2n ** 96n;
+    const sqrtFloat = Number(sqrtPriceX96) / Number(Q96);
+    const ashPerEth = sqrtFloat * sqrtFloat;  // ASH amount per 1 ETH
+    cachedAshPriceEth = 1 / ashPerEth;        // ETH per 1 ASH
+
+    // display
+    if (cachedEthUsd) {
+      const ashUsd = cachedAshPriceEth * cachedEthUsd;
+      const mcap = ashUsd * TOTAL_SUPPLY;
+      setText('psPrice', '$' + fmtPrice(ashUsd));
+      setText('psMcap', '$' + fmtUsd(mcap));
+    } else {
+      setText('psPrice', cachedAshPriceEth.toExponential(3) + ' Ξ');
+    }
+
+    // Pool TVL: try via getLiquidity + tick math (simplified approximation)
+    // For full-range LP at initial price: TVL ≈ 2× ETH side
+    // ETH side = liquidity / sqrtPrice (roughly)
+    // For now we read PoolManager's ETH balance directly as proxy
+    if (readProvider && cachedEthUsd) {
+      const ethBalance = await readProvider.getBalance(ADDR.POOL_MANAGER);
+      const ethF = Number(ethers.formatEther(ethBalance));
+      const tvl = ethF * 2 * cachedEthUsd;
+      if (ethF > 0) {
+        setText('psTvl', '$' + fmtUsd(tvl));
+      } else {
+        setText('psTvl', '— LP pending');
+      }
+    }
+  } catch(e) {
+    console.warn('pool slot0 read failed:', e.message);
+    setText('psPrice', '— pool init pending');
+    setText('psMcap', '—');
+    setText('psTvl', '— LP pending');
+  }
+}
+
+function computePoolId(key) {
+  // V4 PoolId = keccak256(abi.encode(currency0, currency1, fee, tickSpacing, hooks))
+  const types = ['address', 'address', 'uint24', 'int24', 'address'];
+  const values = [key.currency0, key.currency1, key.fee, key.tickSpacing, key.hooks];
+  return ethers.keccak256(ethers.AbiCoder.defaultAbiCoder().encode(types, values));
+}
+
+async function refreshBurnEvents(){
+  const c = ashProtocolRO || ashProtocol;
+  const p = readProvider || provider;
+  if (!c || !p) return;
+
+  try {
+    const latest = await p.getBlockNumber();
+    // scan back ~50000 blocks (~7 days at 12s/block) — enough for new launches
+    const fromBlock = Math.max(0, latest - 50000);
+    const filter = c.filters.Entered();
+    const logs = await c.queryFilter(filter, fromBlock, latest);
+
+    // map to objects, fetch timestamps
+    const newEvents = [];
+    const blocksToFetch = [...new Set(logs.map(l => l.blockNumber))];
+    const blockMap = {};
+    // batch fetch block timestamps (limit 20 parallel)
+    const batches = [];
+    for (let i = 0; i < blocksToFetch.length; i += 10) {
+      batches.push(blocksToFetch.slice(i, i + 10));
+    }
+    for (const batch of batches) {
+      const results = await Promise.all(batch.map(b => p.getBlock(b).catch(() => null)));
+      results.forEach((blk, i) => {
+        if (blk) blockMap[batch[i]] = blk.timestamp;
+      });
+    }
+
+    for (const log of logs) {
+      newEvents.push({
+        block: log.blockNumber,
+        time: blockMap[log.blockNumber] || 0,
+        user: log.args.user,
+        ethSpent: log.args.ethSpent,
+        ashBurned: log.args.ashBurned,
+        newCap: log.args.newCap,
+        txHash: log.transactionHash,
+      });
+    }
+    const sorted = newEvents.sort((a, b) => a.block - b.block);
+
+    // Detect newly seen burns → toast notification
+    if (burnEvents.length > 0 && sorted.length > burnEvents.length) {
+      const fresh = sorted.slice(burnEvents.length);
+      for (const e of fresh) {
+        const ethF = Number(ethers.formatEther(e.ethSpent));
+        const ashF = Number(ethers.formatUnits(e.ashBurned, 18));
+        toast('success', '🔥 New burn',
+          `<b>${short(e.user)}</b> spent ${ethF.toFixed(4)} Ξ, burned ${fmtAsh(e.ashBurned)} ASH<br><a href="https://etherscan.io/tx/${e.txHash}" target="_blank">View tx ↗</a>`);
+      }
+    }
+    burnEvents = sorted;
+
+    // update chart stats
+    updateChartStats();
+    renderChart();
+  } catch(e) {
+    console.warn('queryFilter failed:', e.message);
+  }
+}
+
+function updateChartStats(){
+  const total = burnEvents.length;
+  let totalAsh = 0n, totalEth = 0n;
+  for (const e of burnEvents) {
+    totalAsh += e.ashBurned;
+    totalEth += e.ethSpent;
+  }
+  const avg = total > 0 ? totalEth / BigInt(total) : 0n;
+
+  // 24h activity
+  const dayAgo = Math.floor(Date.now() / 1000) - 86400;
+  let h24Count = 0, h24Vol = 0n;
+  for (const e of burnEvents) {
+    if (e.time >= dayAgo) {
+      h24Count++;
+      h24Vol += e.ethSpent;
+    }
+  }
+
+  setText('cstAshTotal', fmtAsh(totalAsh));
+  setText('cstBurnCount', total.toLocaleString());
+  setText('cstAvgBurn', fmtEth(avg) + ' Ξ');
+  setText('cst24h', h24Count.toLocaleString());
+  setText('cst24hVol', fmtEth(h24Vol) + ' Ξ entered');
+  // ASH burned in USD
+  if (cachedAshPriceEth && cachedEthUsd) {
+    const ashF = Number(ethers.formatUnits(totalAsh, 18));
+    const usd = ashF * cachedAshPriceEth * cachedEthUsd;
+    setText('cstAshUsd', '$' + fmtUsd(usd));
+  }
+}
+
+function setChartMetric(metric, btn){
+  document.querySelectorAll('.chart-tab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  chartMetric = metric;
+  renderChart();
+}
+
+function renderChart(){
+  const canvas = document.getElementById('chartCanvas');
+  const empty = document.getElementById('chartEmpty');
+  if (burnEvents.length === 0) {
+    empty.style.display = 'flex';
+    empty.querySelector('b').textContent = 'Awaiting first burn';
+    empty.querySelector('span:last-child').textContent = 'Be the first to enter and ignite the curve';
+    const existing = canvas.querySelector('svg');
+    if (existing) existing.remove();
+    lastRenderedCount = 0;
+    return;
+  }
+
+  // Build cumulative series
+  let cum = 0;
+  const points = [];
+  for (const e of burnEvents) {
+    let val = 0;
+    if (chartMetric === 'ash')  val = Number(ethers.formatUnits(e.ashBurned, 18));
+    if (chartMetric === 'eth')  val = Number(ethers.formatEther(e.ethSpent));
+    if (chartMetric === 'paid') val = 0;
+    cum += val;
+    points.push({ time: e.time, value: cum, raw: e });
+  }
+
+  if (chartMetric === 'paid') {
+    canvas.querySelector('svg')?.remove();
+    empty.style.display = 'flex';
+    empty.querySelector('b').textContent = 'No claims yet';
+    empty.querySelector('span:last-child').textContent = 'ETH paid out will appear here once users claim';
+    return;
+  }
+
+  empty.style.display = 'none';
+
+  // Detect if new data arrived since last render → animate
+  const isNewData = burnEvents.length > lastRenderedCount;
+  const isFirstRender = lastRenderedCount === 0;
+  const animClass = (isNewData || isFirstRender) ? ' draw' : '';
+  lastRenderedCount = burnEvents.length;
+
+  const W = canvas.clientWidth || 800;
+  const H = 280;
+  const PAD = { l: 50, r: 20, t: 20, b: 30 };
+  const innerW = W - PAD.l - PAD.r;
+  const innerH = H - PAD.t - PAD.b;
+
+  const t0 = points[0].time;
+  // Extend t1 slightly past last point so the latest dot isn't pinned to right edge
+  const tNow = Math.floor(Date.now() / 1000);
+  const tLast = points[points.length - 1].time;
+  const t1 = Math.max(tLast + Math.max(60, (tLast - t0) * 0.05), tNow);
+  const v1 = Math.max(...points.map(p => p.value), 0.0001);
+
+  const x = t => PAD.l + ((t - t0) / Math.max(1, t1 - t0)) * innerW;
+  const y = v => PAD.t + innerH - (v / v1) * innerH;
+
+  // Step path (cumulative growth — flat then jump up)
+  const lineD = points.map((p, i) => {
+    const px = x(p.time), py = y(p.value);
+    if (i === 0) return `M${px},${py}`;
+    const prev = points[i - 1];
+    const ppy = y(prev.value);
+    return `L${px},${ppy} L${px},${py}`;
+  }).join(' ');
+
+  let areaD = '';
+  if (points.length) {
+    const first = points[0];
+    const last = points[points.length - 1];
+    const baseline = PAD.t + innerH;
+    areaD = `M${x(first.time)},${baseline} L${x(first.time)},${y(first.value)} ` +
+            points.slice(1).map((p, i) => {
+              const prev = points[i];
+              const px = x(p.time), py = y(p.value);
+              const ppy = y(prev.value);
+              return `L${px},${ppy} L${px},${py}`;
+            }).join(' ') +
+            ` L${x(last.time)},${baseline} Z`;
+  }
+
+  // Y axis grid + labels
+  const yTicks = 5;
+  let yAxisLabels = '';
+  for (let i = 0; i <= yTicks; i++) {
+    const yval = (v1 / yTicks) * i;
+    const yp = y(yval);
+    let label;
+    if (chartMetric === 'ash') label = fmtAsh(BigInt(Math.round(yval * 1e18)));
+    else label = yval.toFixed(3) + ' Ξ';
+    yAxisLabels += `<text x="${PAD.l - 8}" y="${yp + 3}" text-anchor="end" font-family="JetBrains Mono" font-size="10" fill="#707070">${label}</text>`;
+    yAxisLabels += `<line x1="${PAD.l}" y1="${yp}" x2="${W - PAD.r}" y2="${yp}" stroke="rgba(255,255,255,0.04)" stroke-dasharray="3,3"/>`;
+  }
+
+  // X axis labels
+  const tStart = new Date(t0 * 1000), tEnd = new Date(t1 * 1000);
+  const tMid = new Date(((t0 + t1) / 2) * 1000);
+  const fmtT = d => d.toLocaleDateString('en-US',{month:'short',day:'numeric'}) + ' ' + d.getHours().toString().padStart(2,'0') + ':' + d.getMinutes().toString().padStart(2,'0');
+  const xAxisLabels = `
+    <text x="${PAD.l}" y="${H - 8}" font-family="JetBrains Mono" font-size="10" fill="#707070">${fmtT(tStart)}</text>
+    <text x="${W/2}" y="${H - 8}" font-family="JetBrains Mono" font-size="10" fill="#707070" text-anchor="middle">${fmtT(tMid)}</text>
+    <text x="${W - PAD.r}" y="${H - 8}" font-family="JetBrains Mono" font-size="10" fill="#707070" text-anchor="end">${fmtT(tEnd)}</text>
+  `;
+
+  // Data points: latest one pulses with rings
+  let dotsHtml = '';
+  points.forEach((p, i) => {
+    const px = x(p.time), py = y(p.value);
+    const isLast = i === points.length - 1;
+    if (isLast) {
+      dotsHtml += `<circle cx="${px}" cy="${py}" class="pulse-ring"/>`;
+      dotsHtml += `<circle cx="${px}" cy="${py}" class="pulse-ring" style="animation-delay:1.1s"/>`;
+    }
+    dotsHtml += `<circle cx="${px}" cy="${py}" r="3" stroke="#0A0A0A" stroke-width="1.5" data-i="${i}" class="dot${isLast ? ' latest' : ''}" style="cursor:pointer"/>`;
+  });
+
+  const svg = `
+    <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="ashGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#DC2853" stop-opacity="0.4"/>
+          <stop offset="100%" stop-color="#DC2853" stop-opacity="0"/>
+        </linearGradient>
+      </defs>
+      ${yAxisLabels}
+      ${xAxisLabels}
+      <path d="${areaD}" class="area${animClass}" fill="url(#ashGrad)"/>
+      <path d="${lineD}" class="line${animClass}" fill="none" stroke="#DC2853" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+      ${dotsHtml}
+    </svg>
+  `;
+
+  const existingSvg = canvas.querySelector('svg');
+  if (existingSvg) existingSvg.remove();
+  canvas.insertAdjacentHTML('afterbegin', svg);
+
+  // Wire up dot tooltips
+  const tip = document.getElementById('chartTip');
+  canvas.querySelectorAll('circle.dot').forEach(dot => {
+    dot.addEventListener('mouseenter', () => {
+      const i = +dot.getAttribute('data-i');
+      const p = points[i];
+      const d = new Date(p.time * 1000);
+      let valLabel;
+      if (chartMetric === 'ash') valLabel = `<b>${fmtAsh(BigInt(Math.round(p.value * 1e18)))} ASH</b> burned (cumulative)`;
+      else valLabel = `<b>${p.value.toFixed(4)} Ξ</b> entered (cumulative)`;
+      tip.innerHTML = `
+        <div class="l">Block ${p.raw.block}</div>
+        ${valLabel}
+        <div style="color:var(--fg-3);margin-top:4px">${d.toLocaleString()}</div>
+        <div style="color:var(--fg-3);font-size:9px;margin-top:2px">by ${short(p.raw.user)} · click to view tx</div>
+      `;
+      tip.style.display = 'block';
+      const rect = canvas.getBoundingClientRect();
+      const dotRect = dot.getBoundingClientRect();
+      tip.style.left = Math.min(rect.width - 220, Math.max(0, dotRect.left - rect.left + 12)) + 'px';
+      tip.style.top  = Math.max(0, dotRect.top - rect.top - 80) + 'px';
+    });
+    dot.addEventListener('mouseleave', () => {
+      tip.style.display = 'none';
+    });
+    dot.addEventListener('click', () => {
+      const i = +dot.getAttribute('data-i');
+      window.open(`https://etherscan.io/tx/${points[i].raw.txHash}`, '_blank');
+    });
+  });
+}
+
+async function refreshBlock(){
+  const p = provider || readProvider;
+  if (!p) return;
+  const b = await p.getBlockNumber();
+  if (b !== lastBlock) {
+    lastBlock = b;
+    document.getElementById('liveBlock').textContent = b.toLocaleString();
+  }
+}
+
+async function refreshGlobalStats(){
+  const c = ashProtocolRO || ashProtocol;
+  const t = ashTokenRO || ashToken;
+  if (!c || !t) return;
+
+  try {
+    const [s, supply, poolKey] = await Promise.all([
+      c.stats(),
+      t.totalSupply(),
+      c.POOL_KEY().catch(()=>null),
+    ]);
+    // s = [totalShares, totalEntered, totalPaid, totalAshBurned, totalDevTax, dPS, contractBalance]
+    const [totalShares, totalEntered, totalPaid, totalAshBurned, totalDevTax] = s;
+
+    setText('hAshBurned',    fmtAsh(totalAshBurned));
+    setText('hEthEntered',   fmtEth(totalEntered) + ' Ξ');
+    setText('hEthPaid',      fmtEth(totalPaid) + ' Ξ');
+    setText('hActiveShares', fmtEth(totalShares) + ' Ξ');
+    setText('hDevTax',       fmtEth(totalDevTax) + ' Ξ');
+    setText('hSupply',       fmtAsh(supply));
+
+    // try to derive ASH price from V4 pool — for now we just compute mcap if possible
+    cachedAshPriceEth = null;
+  } catch(e) {
+    console.warn('stats failed:', e.message);
+  }
+}
+
+async function refreshUser(){
+  if (!userAddr || !ashProtocol || !ashToken) return;
+  try {
+    const [acc, ashBal, ethBal] = await Promise.all([
+      ashProtocol.accountOf(userAddr),
+      ashToken.balanceOf(userAddr),
+      provider.getBalance(userAddr),
+    ]);
+    // acc = [capRemaining, shares, withdrawn, totalDeposited, pending]
+    const [capRem, shares, withdrawn, totalDep, pending] = acc;
+
+    document.getElementById('ethBalance').textContent = fmtEth(ethBal);
+    document.getElementById('pAshBal').textContent = fmtAshShort(ashBal);
+    document.getElementById('pAshBalDesc').textContent = ashBal === 0n ? 'no ASH yet' : 'in your wallet';
+    document.getElementById('pDeposited').textContent = fmtEth(totalDep) + ' Ξ';
+    document.getElementById('pWithdrawn').textContent = fmtEth(withdrawn) + ' Ξ';
+    document.getElementById('pPending').textContent = fmtEth(pending) + ' Ξ';
+
+    // ROI (withdrawn / deposited)
+    if (totalDep > 0n) {
+      const roi = Number(withdrawn) / Number(totalDep) * 100;
+      const roiEl = document.getElementById('pRoi');
+      roiEl.textContent = (roi >= 0 ? '+' : '') + roi.toFixed(1) + '%';
+      roiEl.className = roi >= 100 ? 's accent' : 's green';
+    } else {
+      document.getElementById('pRoi').textContent = '+0%';
+    }
+
+    // Claim panel
+    if (totalDep > 0n) {
+      document.getElementById('claimEmpty').style.display = 'none';
+      document.getElementById('claimContent').style.display = 'block';
+      document.getElementById('cTotalDep').textContent = fmtEth(totalDep) + ' Ξ';
+      document.getElementById('cCapRem').textContent = fmtEth(capRem) + ' Ξ';
+      document.getElementById('cWithdrawn').textContent = fmtEth(withdrawn) + ' Ξ';
+      document.getElementById('cPending').textContent = fmtEth(pending) + ' Ξ';
+
+      // progress to 2x
+      const totalCap = totalDep * 2n;
+      const pct = totalCap > 0n ? Math.min(100, Number(withdrawn * 10000n / totalCap) / 100) : 0;
+      document.getElementById('capProgress').style.width = pct + '%';
+      document.getElementById('progressPct').textContent = pct.toFixed(2) + '%';
+    } else {
+      document.getElementById('claimEmpty').style.display = '';
+      document.getElementById('claimContent').style.display = 'none';
+    }
+  } catch(e) {
+    console.warn('refreshUser failed:', e.message);
+  }
+}
+
+//============================== ACTIONS =============================//
+function setAction(name, btn){
+  document.querySelectorAll('.action-tab').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.action-pane').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('pane-' + name).classList.add('active');
+}
+
+function updateEnterPreview(){
+  const v = parseFloat(document.getElementById('enterAmt').value || 0);
+  if (!v || v < 0) {
+    document.getElementById('willBurnAsh').textContent = '0 ASH';
+    document.getElementById('capAdd').textContent = '0.000 Ξ';
+    document.getElementById('totalCap').textContent = '0.000 Ξ';
+    return;
+  }
+  // Estimated burn: we don't know exact slippage without quoter — show note
+  document.getElementById('willBurnAsh').textContent = '≈ market price';
+  document.getElementById('capAdd').textContent = (v * 2).toFixed(4) + ' Ξ';
+  document.getElementById('totalCap').textContent = (v * 2).toFixed(4) + ' Ξ';
+}
+
+function setEnterMax(){
+  // leave 0.01 ETH for gas
+  const balText = document.getElementById('ethBalance').textContent;
+  const bal = parseFloat(balText) || 0;
+  const max = Math.max(0, bal - 0.01);
+  document.getElementById('enterAmt').value = max.toFixed(4);
+  updateEnterPreview();
+}
+
+function setClaimMax(){
+  const pending = document.getElementById('cPending').textContent;
+  const v = parseFloat(pending) || 0;
+  document.getElementById('claimAmt').value = v.toFixed(6);
+}
+
+async function executeEnter(){
+  if (!signer) return connect();
+  const v = parseFloat(document.getElementById('enterAmt').value || 0);
+  if (!v || v < 0.001) return toast('error','Min 0.001 ETH','');
+
+  const value = ethers.parseEther(v.toString());
+  try {
+    toast('info','Confirm in wallet','Sending enter() with ' + v + ' ETH');
+    const tx = await ashProtocol.enter({ value });
+    toast('info','Tx submitted',`<a href="https://etherscan.io/tx/${tx.hash}" target="_blank">${short(tx.hash)} ↗</a>`);
+    const r = await tx.wait();
+    toast('success','Burn complete!','Your 2× cap has been added. Block ' + r.blockNumber);
+    document.getElementById('enterAmt').value = '';
+    updateEnterPreview();
+    setTimeout(refresh, 1000);
+  } catch(e) {
+    handleError(e);
+  }
+}
+
+async function executeClaim(){
+  if (!signer) return connect();
+  const v = parseFloat(document.getElementById('claimAmt').value || 0);
+  if (!v) return toast('error','Enter amount','');
+  const amt = ethers.parseEther(v.toString());
+  try {
+    toast('info','Confirm in wallet','Claiming ' + v + ' ETH');
+    const tx = await ashProtocol.claim(amt);
+    toast('info','Tx submitted',`<a href="https://etherscan.io/tx/${tx.hash}" target="_blank">${short(tx.hash)} ↗</a>`);
+    const r = await tx.wait();
+    toast('success','Claimed','Block ' + r.blockNumber);
+    document.getElementById('claimAmt').value = '';
+    setTimeout(refresh, 1000);
+  } catch(e) {
+    handleError(e);
+  }
+}
+
+async function executeClaimAll(){
+  if (!signer) return connect();
+  try {
+    toast('info','Confirm in wallet','Claiming all pending');
+    const tx = await ashProtocol.claimAll();
+    toast('info','Tx submitted',`<a href="https://etherscan.io/tx/${tx.hash}" target="_blank">${short(tx.hash)} ↗</a>`);
+    const r = await tx.wait();
+    toast('success','Claimed','Block ' + r.blockNumber);
+    setTimeout(refresh, 1000);
+  } catch(e) {
+    handleError(e);
+  }
+}
+
+function handleError(e){
+  const msg = e.shortMessage || e.reason || e.message || 'Unknown error';
+  if (msg.includes('user rejected') || msg.includes('user denied')) {
+    toast('info','Cancelled','You rejected the transaction');
+  } else {
+    toast('error','Transaction failed', msg);
+  }
+}
+
+function copyAddr(key){
+  navigator.clipboard.writeText(ADDR[key]).then(() => {
+    toast('success','Copied to clipboard', ADDR[key]);
+  });
+}
+
+//============================== UTIL =================================//
+function setText(id, val){
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.classList.remove('skel');
+  el.textContent = val;
+}
+
+function short(addr){
+  if (!addr) return '—';
+  return addr.slice(0, 6) + '…' + addr.slice(-4);
+}
+
+function fmtEth(wei){
+  if (!wei) return '0.000';
+  const v = Number(ethers.formatEther(wei));
+  if (v === 0) return '0.000';
+  if (v < 0.001) return '<0.001';
+  if (v < 1) return v.toFixed(4);
+  if (v < 1000) return v.toFixed(3);
+  return Math.floor(v).toLocaleString();
+}
+
+function fmtAsh(wei){
+  if (!wei) return '0';
+  const v = Number(ethers.formatUnits(wei, 18));
+  if (v === 0) return '0';
+  if (v < 1000) return v.toFixed(2);
+  if (v < 1e6) return (v / 1e3).toFixed(2) + 'K';
+  if (v < 1e9) return (v / 1e6).toFixed(2) + 'M';
+  return (v / 1e9).toFixed(2) + 'B';
+}
+
+function fmtAshShort(wei){
+  if (!wei) return '0';
+  return fmtAsh(wei) + ' ASH';
+}
+
+function fmtPrice(usd){
+  if (!usd || usd <= 0) return '0.0000';
+  if (usd < 0.0001) return usd.toExponential(2);
+  if (usd < 0.01) return usd.toFixed(6);
+  if (usd < 1)    return usd.toFixed(4);
+  if (usd < 100)  return usd.toFixed(2);
+  return Math.round(usd).toLocaleString();
+}
+
+function fmtUsd(usd){
+  if (!usd) return '0';
+  if (usd < 1000) return usd.toFixed(2);
+  if (usd < 1e6)  return (usd / 1e3).toFixed(2) + 'K';
+  if (usd < 1e9)  return (usd / 1e6).toFixed(2) + 'M';
+  return (usd / 1e9).toFixed(2) + 'B';
+}
+
+//============================== TOAST ===============================//
+function toast(kind, title, body){
+  const stack = document.getElementById('toastStack');
+  const el = document.createElement('div');
+  el.className = 'toast ' + kind;
+  el.innerHTML = `<div class="body"><b>${title}</b><span>${body || ''}</span></div>`;
+  stack.appendChild(el);
+  setTimeout(() => el.remove(), 6000);
+}
+
+//============================== EMBERS ==============================//
+function spawnEmbers(){
+  const root = document.getElementById('embers');
+  const N = 18;
+  for (let i = 0; i < N; i++) {
+    const e = document.createElement('div');
+    e.className = 'ember';
+    const size = 1.5 + Math.random() * 3;
+    e.style.width  = size + 'px';
+    e.style.height = size + 'px';
+    e.style.left   = Math.random() * 100 + 'vw';
+    e.style.animationDuration = (10 + Math.random() * 18) + 's';
+    e.style.animationDelay    = (-Math.random() * 20) + 's';
+    e.style.opacity = 0.3 + Math.random() * 0.5;
+    root.appendChild(e);
+  }
+}
+
+//============================== BOOT ================================//
+init();
+</script>
+</body>
+</html>
